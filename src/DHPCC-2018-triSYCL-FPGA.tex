@@ -201,15 +201,15 @@ So the programmer is facing a fractal architecture, demanding
 also more and more control for power efficiency. This tends to require
 a dense fractal set of skills and tools.
 
-SYCL \cite{SYCL-1.2,SYCL-2.2-provisional} is a new open standard from Khronos
-Group aiming at solving some of the programming issues related to
-heterogeneous computing.  This pure C++14 (for SYCL 1.2) or C++17 (for
-SYCL 2.2) domain-specific embedded
-language allows the programmer to write single-source C++ host code
-with accelerated code expressed as functors. The data accesses are
-described with accessor objects that implicitly define a task graph
-that can be asynchronously scheduled on a distributed-memory system
-including several CPU and accelerators.
+SYCL \cite{SYCL-1.2.1,SYCL-2.2-provisional} is a new open standard
+from Khronos Group aiming at solving some of the programming issues
+related to heterogeneous computing.  This pure C++14 (for SYCL 1.2.1)
+or C++17 (for SYCL 2.2) domain-specific embedded language allows the
+programmer to write single-source C++ host code with accelerated code
+expressed as functors. The data accesses are described with accessor
+objects that implicitly define a task graph that can be asynchronously
+scheduled on a distributed-memory system including several CPU and
+accelerators.
 
 This programming model is quite generic but provides also an
 interoperability mode with the OpenCL realm, another standard from
@@ -318,7 +318,7 @@ int main() {
     \url{https://github.com/triSYCL/triSYCL/blob/master/tests/examples/demo_parallel_matrix_add.cpp}.\label{fig:SYCL-example}}
 \end{figure*}
 
-SYCL \cite{SYCL-1.2,SYCL-2.2-provisional} (pronounced ``sickle'') is a
+SYCL \cite{SYCL-1.2.1,SYCL-2.2-provisional} (pronounced ``sickle'') is a
 royalty-free, cross-platform abstraction C++ programming model for
 OpenCL \cite{OpenCL-API-2.2-provisional,
   OpenCL-C++-2.2-provisional}. SYCL builds on the underlying concepts,
@@ -468,7 +468,7 @@ The main interesting features that SYCL brings are:
 
 SYCL retains the execution model, runtime feature set and device
 capabilities of the underlying OpenCL standard. This is why SYCL
-1.2~\cite{SYCL-1.2} targets devices with OpenCL
+1.2.1~\cite{SYCL-1.2.1} targets devices with OpenCL
 1.2~\cite{OpenCL-API+C-1.2} capabilities, while SYCL
 2.2~\cite{SYCL-2.2-provisional} targets devices with OpenCL
 2.2~\cite{OpenCL-API-2.2-provisional} capabilities, adding for example
