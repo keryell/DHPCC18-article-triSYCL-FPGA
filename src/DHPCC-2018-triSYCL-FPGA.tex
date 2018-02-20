@@ -15,6 +15,15 @@
 % URL looks nicer in Teletype style
 \urlstyle{tt}
 
+% An alternative is
+% https://tex.stackexchange.com/questions/266401/frame-a-line-in-an-environnement-lstlisting
+% https://tex.stackexchange.com/questions/8851/how-can-i-highlight-some-lines-from-source-code
+% /usr/share/doc/texlive-doc/latex/tikzmark/tikzmark.pdf
+\usetikzlibrary{tikzmark}
+\usetikzmarklibrary{listings}
+\usepackage{balloon_rk_no_beamer}
+
+
 % Copyright
 %\setcopyright{none}
 %\setcopyright{acmcopyright}
@@ -229,8 +238,10 @@ to some related work in Section~\ref{sec:related-work}.
 \label{sec:sycl}
 
 \begin{figure*}
+  \balloono{comment}{example}{17}{26}
+  \balloon{comment}{example}{22}{25}
   \begin{tabular}{c}
-    \begin{lstlisting}[basicstyle=\scriptsize]
+    \begin{lstlisting}[basicstyle=\scriptsize,name=example]
 // Demonstrate the use of an asynchronous task graph of kernels to initialize and add 2 matrices.
 #include <CL/sycl.hpp>
 #include <iostream>
