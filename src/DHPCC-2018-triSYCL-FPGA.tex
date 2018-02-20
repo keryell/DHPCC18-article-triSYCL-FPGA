@@ -240,6 +240,15 @@ to some related work in Section~\ref{sec:related-work}.
 \begin{figure*}
   \balloono{comment}{example}{17}{26}
   \balloon{comment}{example}{22}{25}
+  \balloono{comment}{example}{28}{37}
+  \balloon{comment}{example}{33}{36}
+  \balloono{comment}{example}{39}{50}
+  \balloon{comment}{example}{46}{49}
+  \begin{tikzpicture}[remember picture,overlay]
+    \draw [overlay,->,very thick,red] (pic cs:PA) to[bend left] (pic cs:CA);
+    \draw [overlay,->,very thick,red] (pic cs:PB) to[bend left] (pic cs:CB);
+    \draw [overlay,->,very thick,red] (pic cs:PC) to[bend right] (pic cs:CC);
+  \end{tikzpicture}
   \begin{tabular}{c}
     \begin{lstlisting}[basicstyle=\scriptsize,name=example]
 // Demonstrate the use of an asynchronous task graph of kernels to initialize and add 2 matrices.
@@ -260,7 +269,7 @@ int main() {
   // Launch a first asynchronous kernel to initialize a
   q.submit([&] (handler &cgh) {
       // The kernel writes a, so get a write accessor on it
-      auto A = a.get_access<access::mode::write>(cgh);
+      auto A = a.get_access<access::mode::write>(cgh);Ÿ\tikzmark{PA}Ÿ
 
       // Enqueue a parallel kernel iterating on a N*M 2D iteration space
       cgh.parallel_for<class init_a>({ N, M },
@@ -271,7 +280,7 @@ int main() {
   // Launch an asynchronous kernel to initialize b
   q.submit([&] (handler &cgh) {
       // The kernel writes b, so get a write accessor on it
-      auto B = b.get_access<access::mode::write>(cgh);
+      auto B = b.get_access<access::mode::write>(cgh);Ÿ\tikzmark{PB}Ÿ
       /* From the access pattern above, the SYCL runtime detects this command group is independent from the first one and can be scheduled independently.
          Enqueue a parallel kernel iterating on a N*M 2D iteration space */
       cgh.parallel_for<class init_b>({ N, M },
@@ -282,9 +291,9 @@ int main() {
   // Launch an asynchronous kernel to compute matrix addition c = a + b
     q.submit([&] (handler &cgh) {
         // In the kernel a and b are read, but c is written
-        auto A = a.get_access<access::mode::read>(cgh);
-        auto B = b.get_access<access::mode::read>(cgh);
-        auto C = c.get_access<access::mode::write>(cgh);
+        auto A = a.get_access<access::mode::read>(cgh);Ÿ\tikzmark{CA}Ÿ
+        auto B = b.get_access<access::mode::read>(cgh);Ÿ\tikzmark{CB}Ÿ
+        auto C = Ÿ\tikzmark{PC}Ÿc.get_access<access::mode::write>(cgh);
         // From these accessors, the SYCL runtime will ensure that when this kernel is run, the kernels computing
         // a and b completed. Then Enqueue a parallel kernel iterating on a N*M 2D iteration space
         cgh.parallel_for<class matrix_add>({ N, M },
@@ -293,7 +302,7 @@ int main() {
                                            });
       });
     /* Request an accessor to read c from the host-side. The SYCL runtime ensures that c is ready when the accessor is returned */
-    auto C = c.get_access<access::mode::read>();
+    auto C = Ÿ\tikzmark{CC}Ÿc.get_access<access::mode::read>();
     std::cout << std::endl << "Result:" << std::endl;
     for (size_t i = 0; i < N; i++)
       for (size_t j = 0; j < M; j++)
@@ -309,7 +318,7 @@ int main() {
     \end{lstlisting}
   \end{tabular}
   \caption{Example of a SYCL C++ program producing and adding 2
-    matrices, coming from from
+    matrices, coming from
     \url{https://github.com/triSYCL/triSYCL/blob/master/tests/examples/demo_parallel_matrix_add.cpp}.\label{fig:SYCL-example}}
 \end{figure*}
 
