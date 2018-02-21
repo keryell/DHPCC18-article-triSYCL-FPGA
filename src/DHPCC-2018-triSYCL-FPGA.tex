@@ -84,6 +84,7 @@
 \begin{document}
 
 \title{Early experiments using SYCL single-source modern C++ on Xilinx FPGA}
+\subtitle{Extended Abstract of Technical Presentation}
 
 \author{Ronan Keryell}
 \email{rkeryell@xilinx.com}
@@ -563,10 +564,35 @@ partitioned by block (Figure~\ref{fig:block-array}) or fully partitioned
 the cost of a very complex routing.
 
 In a ``normal'' computer this is not a parameter to be taken in
-consideration, but for FPGA this is something useful to express somehow,
-when compiling a C/C++ program for FPGA. Each FPGA vendor have some
-extensions to express these optimizations, such as
-\cite{iwocl16,sdsoc,hls,sdaccel,altera}.
+consideration, but for FPGA this is something useful to express
+somehow, when compiling a C/C++ program for FPGA. Each FPGA vendor
+have some extensions to express these optimizations, such as
+\cite{IWOCL2016:OpenCL_Xilinx_FPGA,
+  Xilinx:UG1207-2017.4:SDAccel_Profiling_Optimization,
+  Xilinx:UG1235-2017.4:SDSoC_Profiling_Optimization,
+  Xilinx:UG1270-2017.4:HLS_Optimization_Methodology,
+  Xilinx:UG1253-2017.4:SDx_Pragma_Reference,
+,altera}, based on \lstinline|#pragma|, attributes or even
+configuration files or compiler options.
+
+The issues with extensions such as \lstinline|#pragma| or attributes
+is that they require a specific compiler to parse and understand them.
+This prevents some emulation on CPU for example, with some
+compile-time and run-time checking.
+
+In our SYCL implementation, we prefer to have some pure C++
+class-based extensions, compatible with CPU emulation and more aligned
+with SYCL DSeL philosophy.
+
+Since in C++ there is a \lstinline|std::array| we introduced a new
+\lstinline|cl::sycl::xilinx::partition_array| similar to
+\lstinline|std::array| but taking a new templated class parameter to
+model the partition.
+
+For now we support only 1-dimension arrays similar to
+\lstinline|std::array| because we are waiting for the ISO C++
+standardization committee to define multidimensional arrays
+\cite{C++:P0xyzrv:md-span} so we can align on the same syntax.
 
 
 \section{SYCL and OpenCL interoperability mode}
