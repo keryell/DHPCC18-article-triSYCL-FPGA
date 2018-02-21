@@ -526,6 +526,46 @@ presented at C++ F2F committee Jacksonville 2016/02
 \fi
 
 
+\section{Array partitioning}
+\label{sec:array-partitioning}
+
+On FPGA even the memories are configurable and can be implemented with
+different level of parallelism, providing some trade-off between hardware
+complexity (cost), bandwidth and latency.
+
+\begin{figure}
+  \caption{Array of 16 elements distributed in a cyclic way on 4 memory
+    banks. The numbers represent the indices of the array elements stored
+    on the memory banks.}
+\label{fig:cyclic-array}
+\end{figure}
+
+\begin{figure}
+  \caption{Array of 16 elements distributed by blocks on 4 memory
+    banks. The numbers represent the indices of the array elements stored
+    on the memory banks.}
+\label{fig:block-array}
+\end{figure}
+
+\begin{figure}
+  \caption{Complete partition of an array of 16 elements, with 1 element
+    by register.}
+\label{fig:complete-partition-array}
+\end{figure}
+
+For example an array in a program on an FPGA can be distributed on
+different memory banks in a cyclic way (Figure~\ref{fig:cyclic-array}),
+partitioned by block (Figure~\ref{fig:block-array}) or fully partitioned
+(Figure~\ref{fig:complete-partition-array}) for a maximum bandwidth but at
+the cost of a very complex routing.
+
+In a ``normal'' computer this is not a parameter to be taken in
+consideration, but for FPGA this is something useful to express somehow,
+when compiling a C/C++ program for FPGA. Each FPGA vendor have some
+extensions to express these optimizations, such as
+\cite{iwocl16,sdsoc,hls,sdaccel,altera}.
+
+
 \section{SYCL and OpenCL interoperability mode}
 \label{sec:sycl-opencl-inter}
 
