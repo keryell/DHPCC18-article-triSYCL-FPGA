@@ -594,6 +594,97 @@ For now we support only 1-dimension arrays similar to
 standardization committee to define multidimensional arrays
 \cite{C++:P0xyzrv:md-span} so we can align on the same syntax.
 
+\begin{figure*}
+  \balloono{comment}{PartitionCyclicblockTriSYCL}{8}{9}
+  \balloono{comment}{PartitionCyclicblockTriSYCL}{12}{13}
+  \balloono{comment}{PartitionCyclicblockTriSYCL}{14}{15}
+  \balloon{comment}{PartitionCyclicblockTriSYCL}{23}{23}
+  \balloon{comment}{PartitionCyclicblockTriSYCL}{26}{26}
+  \balloon{comment}{PartitionCyclicblockTriSYCL}{31}{31}
+  \balloon{comment}{PartitionCyclicblockTriSYCL}{34}{34}
+  \balloon{comment}{PartitionCyclicblockTriSYCL}{42}{42}
+  \balloon{comment}{PartitionCyclicblockTriSYCL}{48}{48}
+  \balloon{comment}{PartitionCyclicblockTriSYCL}{55}{55}
+  \balloon{comment}{PartitionCyclicblockTriSYCL}{58}{58}
+  \begin{tabular}{c}
+    \begin{lstlisting}[basicstyle=\scriptsize,name=PartitionCyclicblockTriSYCL]
+      cgh.single_task<class add>([=,
+                                  d_out = drt::accessor<decltype(a_out)> { a_out },
+                                  d_in1 = drt::accessor<decltype(a_in1)> { a_in1 },
+                                  d_in2 = drt::accessor<decltype(a_in2)> { a_in2 }
+      ] {
+            // Cyclic Partition for A as matrix multiplication needs row-wise
+            // parallel access
+            xilinx::partition_array<Type, BLOCK_SIZE,
+                                    xilinx::partition::cyclic<MAX_DIM>> A;
+            // Block Partition for B as matrix multiplication needs column-wise
+            // parallel access
+            xilinx::partition_array<Type, BLOCK_SIZE,
+                                    xilinx::partition::block<MAX_DIM>> B;
+            xilinx::partition_array<Type, BLOCK_SIZE> C;
+
+            // As A and B Matrix are partitioned with the factor of MAX_DIM, so
+            // to get parallel row/column access, input square matrix[DIMXDIM]
+            // should be written into local Array in MATRIX[MAX_DIM * MAX_DIM]
+            // format
+
+            // Burst read for matrix A
+            for (int itr = 0, i = 0, j = 0; itr < DIM * DIM; itr++, j++) {
+              xilinx::pipeline([&] {
+                if (j == DIM) { j = 0; i++; }
+                A[i*MAX_DIM + j] = d_in1[itr];
+              });
+            }
+
+            // Burst read for matrix B
+            for (int itr = 0, i = 0, j = 0; itr < DIM * DIM; itr++, j++) {
+              xilinx::pipeline([&] {
+                if (j == DIM) { j = 0; i++; }
+                B[i * MAX_DIM + j] = d_in2[itr];
+              });
+            }
+
+            for (int i = 0; i < DIM; i++) {
+              // As A and B are partition correctly so loop pipelining is
+              // applied at 2nd level loop and which will eventually unroll
+              // the lower loop
+              for (int j = 0; j < DIM ; j++) {
+                xilinx::pipeline([&] {
+                  int result = 0;
+                  for (int k = 0; k < MAX_DIM; k++) {
+                      result += A[i * MAX_DIM +  k] * B[k * MAX_DIM + j];
+                  }
+                  C[i*MAX_DIM + j] = result;
+                });
+              }
+            }
+
+            // Burst write from output matrices to global memory
+            // Burst write from matrix C
+            for (int itr = 0, i = 0, j = 0; itr < DIM * DIM; itr++, j++) {
+              xilinx::pipeline([&] {
+                if (j == DIM) { j = 0; i++; }
+                d_out[itr] = C[i * MAX_DIM + j];
+              });
+            }
+
+        });
+    \end{lstlisting}
+  \end{tabular}
+  \caption{Example of a matrix multiplication kernel using partitioned
+    arrays (orange background) and pipelining (blue background).}
+  \label{fig:SYCL-partition-cyclic-block}
+\end{figure*}
+
+The example on Figure~\ref{fig:SYCL-partition-cyclic-block} show how
+partitioned arrays are used to speed-up the computation, in
+combination with pipelining, by reducing the bank conflicts even if
+the pipelining increase the bandwidth of the computation.
+
+We have run various experiments on this benchmark with and without
+these optimizations in SYCL but also with non-single source HLS C++ or
+OpenCL C kernels.
+
 
 \section{SYCL and OpenCL interoperability mode}
 \label{sec:sycl-opencl-inter}
