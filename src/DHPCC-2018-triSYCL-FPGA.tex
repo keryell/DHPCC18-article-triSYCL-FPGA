@@ -1,6 +1,7 @@
 %\documentclass[sigplan]{acmart}
 \documentclass[sigplan, review, authordraft]{acmart}
 
+\usepackage[utf8]{inputenc}
 \usepackage{booktabs} % For formal tables
 
 % To include figures
@@ -136,10 +137,10 @@
   using other languages available for Xilinx FPGA: HLS C++ and OpenCL
   C.
 
-  We end up with an experiment using the current CNL proposal for
-  fixed-point data types in ISO C++, giving guidance to the ISO
-  committee and demonstrating the advantage of pure standard C++ for
-  all-programmable devices beyond CPU, such as FPGA MPSoC.
+  %We end up with an experiment using the current CNL proposal for
+  %fixed-point data types in ISO C++, giving guidance to the ISO
+  %committee and demonstrating the advantage of pure standard C++ for
+  %all-programmable devices beyond CPU, such as FPGA MPSoC.
 \end{abstract}
 
 %
@@ -527,6 +528,85 @@ presented at C++ F2F committee Jacksonville 2016/02
 \fi
 
 
+\section{Fine grain parallel execution}
+\label{sec:fine-grain-parallel}
+
+High-level programs on FPGA are typically compiled with each operation
+translated in some hardware implementation. Compare to the compilation for
+architectures with fixed hardware functions such as CPU, DSP or GPU, that
+means that the hardware implementations of the operations do coexist in
+space inside the FPGA, which means that they can be used in parallel to
+increase the throughput of the system.
+
+In a ``normal'' computer this is not a parameter to be taken in
+consideration, but for FPGA this is something useful to express somehow,
+when compiling a C/C++ program for FPGA. Each FPGA vendor have some
+extensions to express these optimizations, such as
+\cite{IWOCL2016:OpenCL_Xilinx_FPGA,
+  Xilinx:UG1207-2017.4:SDAccel_Profiling_Optimization,
+  Xilinx:UG1235-2017.4:SDSoC_Profiling_Optimization,
+  Xilinx:UG1270-2017.4:HLS_Optimization_Methodology,
+  Xilinx:UG1253-2017.4:SDx_Pragma_Reference, altera}, based on
+\lstinline|#pragma|, attributes or even configuration files or compiler
+options.
+
+The issues  with extensions such  as \lstinline|#pragma| or  attributes is
+that they require a specific compiler  to parse and understand them.  This
+prevents some  emulation on  CPU for example,  with some  compile-time and
+run-time checking.
+
+In our SYCL implementation, we prefer to have some pure C++ function-based
+and class-based extensions, compatible with CPU emulation and more aligned
+with SYCL DSeL philosophy.
+
+
+\subsection{Pipelined execution}
+\label{sec:pipelined-execution}
+
+\begin{figure}
+  \includegraphics[width=\hsize]{Figures/pipeline_execution}
+  \caption{Execution of operations of a loop in normal and pipelined way.}
+  \label{fig:pipelined-execution}
+\end{figure}
+
+In a loop, all the operations of an iteration will be executed
+sequentially, as shown on Figure~\ref{fig:pipelined-execution}. The
+operations are used in sequence and if there is no intra-loop dependency
+in the program preventing this, the operations from different iterations
+can actually be executed in parallel, to increase the throughput using the
+pipelined execution shown also on Figure~\ref{fig:pipelined-execution}, by
+reducing the \emph{initiation interval}, as said in FPGA jargon.
+
+\begin{figure}
+  \balloon{comment}{PipelinedTriSYCL}{5}{5}
+  \balloon{comment}{PipelinedTriSYCL}{9}{9}
+  \begin{tabular}{c}
+    \begin{lstlisting}[basicstyle=\scriptsize,name=PipelinedTriSYCL]
+template<typename T, typename U>
+void compute(T *buffer_in, U *buffer_out) {
+  for(int i = 0; i < NUM_ROWS; ++i) {
+    for (int j = 0; j < ELE_PER_ROW; ++j) {
+      xilinx::pipeline([&] {
+        int inTmp = buffer_in[ELE_PER_ROW*i+j];
+        int outTmp = inTmp * ALPHA;
+        buffer_out[ELE_PER_ROW*i+j] = outTmp;
+      });
+    }
+  }
+}
+    \end{lstlisting}
+  \end{tabular}
+  \caption{Example of a typical loop with pipelined execution. What is
+    added is shown with a blue background.}
+  \label{fig:SYCL-pipelined}
+\end{figure}
+
+As shown on Figure~\ref{fig:SYCL-pipelined} we chose to mark a zone to be
+pipelined with a kind of decorator \emph{à la} Python
+\cite{Python:PEP318:decorators} taking a functor, typically expressed in
+modern C++ as a lambda expression.
+
+
 \section{Array partitioning}
 \label{sec:array-partitioning}
 
@@ -539,7 +619,7 @@ complexity (cost), bandwidth and latency.
   \caption{Array of 16 elements distributed in a cyclic way on 4 memory
     banks. The numbers represent the indices of the array elements stored
     on the memory banks.}
-\label{fig:cyclic-array}
+  \label{fig:cyclic-array}
 \end{figure}
 
 \begin{figure}
@@ -547,14 +627,14 @@ complexity (cost), bandwidth and latency.
   \caption{Array of 16 elements distributed by blocks on 4 memory
     banks. The numbers represent the indices of the array elements stored
     on the memory banks.}
-\label{fig:block-array}
+  \label{fig:block-array}
 \end{figure}
 
 \begin{figure}
   \includegraphics[width=\hsize]{Figures/complete_partition_array}
   \caption{Complete partition of an array of 16 elements, with 1 element
     by register.}
-\label{fig:complete-partition-array}
+  \label{fig:complete-partition-array}
 \end{figure}
 
 For example an array in a program on an FPGA can be distributed on
@@ -562,27 +642,6 @@ different memory banks in a cyclic way (Figure~\ref{fig:cyclic-array}),
 partitioned by block (Figure~\ref{fig:block-array}) or fully partitioned
 (Figure~\ref{fig:complete-partition-array}) for a maximum bandwidth but at
 the cost of a very complex routing.
-
-In a ``normal'' computer this is not a parameter to be taken in
-consideration, but for FPGA this is something useful to express
-somehow, when compiling a C/C++ program for FPGA. Each FPGA vendor
-have some extensions to express these optimizations, such as
-\cite{IWOCL2016:OpenCL_Xilinx_FPGA,
-  Xilinx:UG1207-2017.4:SDAccel_Profiling_Optimization,
-  Xilinx:UG1235-2017.4:SDSoC_Profiling_Optimization,
-  Xilinx:UG1270-2017.4:HLS_Optimization_Methodology,
-  Xilinx:UG1253-2017.4:SDx_Pragma_Reference,
-,altera}, based on \lstinline|#pragma|, attributes or even
-configuration files or compiler options.
-
-The issues with extensions such as \lstinline|#pragma| or attributes
-is that they require a specific compiler to parse and understand them.
-This prevents some emulation on CPU for example, with some
-compile-time and run-time checking.
-
-In our SYCL implementation, we prefer to have some pure C++
-class-based extensions, compatible with CPU emulation and more aligned
-with SYCL DSeL philosophy.
 
 Since in C++ there is a \lstinline|std::array| we introduced a new
 \lstinline|cl::sycl::xilinx::partition_array| similar to
