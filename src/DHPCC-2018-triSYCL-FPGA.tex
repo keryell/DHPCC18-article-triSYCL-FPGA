@@ -575,7 +575,7 @@ operations are used in sequence and if there is no intra-loop dependency
 in the program preventing this, the operations from different iterations
 can actually be executed in parallel, to increase the throughput using the
 pipelined execution shown also on Figure~\ref{fig:pipelined-execution}, by
-reducing the \emph{initiation interval}, as said in FPGA jargon.
+reducing the \emph{initiation interval}, to use the FPGA jargon.
 
 \begin{figure}
   \balloon{comment}{PipelinedTriSYCL}{5}{5}
@@ -602,9 +602,105 @@ void compute(T *buffer_in, U *buffer_out) {
 \end{figure}
 
 As shown on Figure~\ref{fig:SYCL-pipelined} we chose to mark a zone to be
-pipelined with a kind of decorator \emph{Ã  la} Python
-\cite{Python:PEP318:decorators} taking a functor, typically expressed in
-modern C++ as a lambda expression.
+pipelined with a kind of decorator \emph{à la} Python
+\cite{Python:PEP318:decorators} \lstinline|xilinx::pipeline(...)| taking a
+functor, typically expressed in modern C++ as a lambda expression.
+
+
+\subsection{Dataflow execution}
+\label{sec:dataflow-execution}
+
+While pipeline execution is very fine-grain parallelism, a coarser-grain
+parallelism can be used when having different functions with data flowing
+from one function to another: dataflow execution.
+
+\begin{figure}
+  \includegraphics[width=\hsize]{Figures/dataflow_execution}
+  \caption{Execution of functions without or with dataflow mode.}
+  \label{fig:dataflow-execution}
+\end{figure}
+
+Since on the FPGA the functions are instantiated in hardware, they can
+execute in parallel and if data dependencies allow it, data can move from
+one function to another either using dual-buffering ping-pong buffers
+(preventing the time-consuming and power-hungry external memory) or even a
+FIFO (preventing the use of more complex power-hungry memory access), as
+shown on \ref{fig:dataflow-execution}.
+
+\begin{figure}
+  \balloon{comment}{DataFlowTriSYCL}{5}{5}
+  \balloon{comment}{DataFlowTriSYCL}{7}{7}
+  \balloon{comment}{DataFlowTriSYCL}{14}{14}
+  \balloon{comment}{DataFlowTriSYCL}{18}{18}
+  \balloon{comment}{DataFlowTriSYCL}{25}{25}
+  \balloon{comment}{DataFlowTriSYCL}{27}{27}
+  \balloon{comment}{DataFlowTriSYCL}{27}{27}
+  \balloono{comment}{DataFlowTriSYCL}{37}{37}
+  \balloono{comment}{DataFlowTriSYCL}{41}{41}
+  \begin{tabular}{c}
+    \begin{lstlisting}[basicstyle=\scriptsize,name=DataFlowTriSYCL]
+template<typename T, typename U>
+void readInput(T *buffer_in, const U &d_b) {
+  for(int i = 0; i < NUM_ROWS; ++i)
+    for (int j = 0; j < ELE_PER_ROW; ++j)
+      xilinx::pipeline([&] {
+        buffer_in[ELE_PER_ROW*i+j] = d_b[ELE_PER_ROW*i+j];
+      });
+}
+
+template<typename T, typename U>
+void compute(T *buffer_in, U *buffer_out) {
+  for(int i = 0; i < NUM_ROWS; ++i)
+    for (int j = 0; j < ELE_PER_ROW; ++j)
+      xilinx::pipeline([&] {
+        int inTmp = buffer_in[ELE_PER_ROW*i+j];
+        int outTmp = inTmp * ALPHA;
+        buffer_out[ELE_PER_ROW*i+j] = outTmp;
+      });
+}
+
+template<typename T, typename U>
+void writeOutput(T *buffer_out, const U &d_a) {
+  for(int i = 0; i < NUM_ROWS; ++i)
+    for (int j = 0; j < ELE_PER_ROW; ++j)
+      xilinx::pipeline([&] {
+        d_a[ELE_PER_ROW*i+j] = buffer_out[ELE_PER_ROW*i+j];
+      });
+}
+
+cgh.single_task<class add>
+           ([=,
+             d_a = drt::accessor<decltype(a_a)> { a_a },
+             d_b = drt::accessor<decltype(a_b)> { a_b }
+             ] {
+                 int buffer_in[BLOCK_SIZE];
+                 int buffer_out[BLOCK_SIZE];
+                 xilinx::dataflow([&] {
+                     readInput(buffer_in, d_b);
+                     compute(buffer_in, buffer_out);
+                     writeOutput(buffer_out, d_a);
+                 });
+               });
+    \end{lstlisting}
+  \end{tabular}
+  \caption{Example of a typical loop with functional dataflow execution
+    with also pipelined execution of each function. What is added for
+    dataflow execution has an orange background and for a pipelined
+    execution has a blue background.}
+  \label{fig:SYCL-dataflow}
+\end{figure}
+
+To mark an area in the program to apply such an optimization, we use the
+same trick as for pipelining (\S~\ref{sec:pipelined-execution}) with a
+\lstinline|xilinx::dataflow(...)| as shown on
+Figure~\ref{fig:SYCL-dataflow}. Currently we have a limitation in our
+device compiler and runtime that requires changing the lambda captures
+with \lstinline|drt::accessor| like adding in the example some lines such
+as
+\begin{lstlisting}[basicstyle=\scriptsize,name=DataFlowTriSYCL]
+d_a = drt::accessor<decltype(a_a)> { a_a },
+\end{lstlisting}
+but this limitation should be removed soon.
 
 
 \section{Array partitioning}
@@ -667,67 +763,67 @@ standardization committee to define multidimensional arrays
   \balloon{comment}{PartitionCyclicblockTriSYCL}{58}{58}
   \begin{tabular}{c}
     \begin{lstlisting}[basicstyle=\scriptsize,name=PartitionCyclicblockTriSYCL]
-      cgh.single_task<class add>([=,
-                                  d_out = drt::accessor<decltype(a_out)> { a_out },
-                                  d_in1 = drt::accessor<decltype(a_in1)> { a_in1 },
-                                  d_in2 = drt::accessor<decltype(a_in2)> { a_in2 }
-      ] {
-            // Cyclic Partition for A as matrix multiplication needs row-wise
-            // parallel access
-            xilinx::partition_array<Type, BLOCK_SIZE,
-                                    xilinx::partition::cyclic<MAX_DIM>> A;
-            // Block Partition for B as matrix multiplication needs column-wise
-            // parallel access
-            xilinx::partition_array<Type, BLOCK_SIZE,
-                                    xilinx::partition::block<MAX_DIM>> B;
-            xilinx::partition_array<Type, BLOCK_SIZE> C;
+cgh.single_task<class add>([=,
+                            d_out = drt::accessor<decltype(a_out)> { a_out },
+                            d_in1 = drt::accessor<decltype(a_in1)> { a_in1 },
+                            d_in2 = drt::accessor<decltype(a_in2)> { a_in2 }
+] {
+      // Cyclic Partition for A as matrix multiplication needs row-wise
+      // parallel access
+      xilinx::partition_array<Type, BLOCK_SIZE,
+                              xilinx::partition::cyclic<MAX_DIM>> A;
+      // Block Partition for B as matrix multiplication needs column-wise
+      // parallel access
+      xilinx::partition_array<Type, BLOCK_SIZE,
+                              xilinx::partition::block<MAX_DIM>> B;
+      xilinx::partition_array<Type, BLOCK_SIZE> C;
 
-            // As A and B Matrix are partitioned with the factor of MAX_DIM, so
-            // to get parallel row/column access, input square matrix[DIMXDIM]
-            // should be written into local Array in MATRIX[MAX_DIM * MAX_DIM]
-            // format
+      // As A and B Matrix are partitioned with the factor of MAX_DIM, so
+      // to get parallel row/column access, input square matrix[DIMXDIM]
+      // should be written into local Array in MATRIX[MAX_DIM * MAX_DIM]
+      // format
 
-            // Burst read for matrix A
-            for (int itr = 0, i = 0, j = 0; itr < DIM * DIM; itr++, j++) {
-              xilinx::pipeline([&] {
-                if (j == DIM) { j = 0; i++; }
-                A[i*MAX_DIM + j] = d_in1[itr];
-              });
-            }
-
-            // Burst read for matrix B
-            for (int itr = 0, i = 0, j = 0; itr < DIM * DIM; itr++, j++) {
-              xilinx::pipeline([&] {
-                if (j == DIM) { j = 0; i++; }
-                B[i * MAX_DIM + j] = d_in2[itr];
-              });
-            }
-
-            for (int i = 0; i < DIM; i++) {
-              // As A and B are partition correctly so loop pipelining is
-              // applied at 2nd level loop and which will eventually unroll
-              // the lower loop
-              for (int j = 0; j < DIM ; j++) {
-                xilinx::pipeline([&] {
-                  int result = 0;
-                  for (int k = 0; k < MAX_DIM; k++) {
-                      result += A[i * MAX_DIM +  k] * B[k * MAX_DIM + j];
-                  }
-                  C[i*MAX_DIM + j] = result;
-                });
-              }
-            }
-
-            // Burst write from output matrices to global memory
-            // Burst write from matrix C
-            for (int itr = 0, i = 0, j = 0; itr < DIM * DIM; itr++, j++) {
-              xilinx::pipeline([&] {
-                if (j == DIM) { j = 0; i++; }
-                d_out[itr] = C[i * MAX_DIM + j];
-              });
-            }
-
+      // Burst read for matrix A
+      for (int itr = 0, i = 0, j = 0; itr < DIM * DIM; itr++, j++) {
+        xilinx::pipeline([&] {
+          if (j == DIM) { j = 0; i++; }
+          A[i*MAX_DIM + j] = d_in1[itr];
         });
+      }
+
+      // Burst read for matrix B
+      for (int itr = 0, i = 0, j = 0; itr < DIM * DIM; itr++, j++) {
+        xilinx::pipeline([&] {
+          if (j == DIM) { j = 0; i++; }
+          B[i * MAX_DIM + j] = d_in2[itr];
+        });
+      }
+
+      for (int i = 0; i < DIM; i++) {
+        // As A and B are partition correctly so loop pipelining is
+        // applied at 2nd level loop and which will eventually unroll
+        // the lower loop
+        for (int j = 0; j < DIM ; j++) {
+          xilinx::pipeline([&] {
+            int result = 0;
+            for (int k = 0; k < MAX_DIM; k++) {
+                result += A[i * MAX_DIM +  k] * B[k * MAX_DIM + j];
+            }
+            C[i*MAX_DIM + j] = result;
+          });
+        }
+      }
+
+      // Burst write from output matrices to global memory
+      // Burst write from matrix C
+      for (int itr = 0, i = 0, j = 0; itr < DIM * DIM; itr++, j++) {
+        xilinx::pipeline([&] {
+          if (j == DIM) { j = 0; i++; }
+          d_out[itr] = C[i * MAX_DIM + j];
+        });
+      }
+
+  });
     \end{lstlisting}
   \end{tabular}
   \caption{Example of a matrix multiplication kernel using partitioned
