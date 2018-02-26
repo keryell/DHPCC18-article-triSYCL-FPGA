@@ -24,6 +24,15 @@
 \usetikzmarklibrary{listings}
 \usepackage{balloon_rk_no_beamer}
 
+% I got often this error:
+% pdfTeX error (ext4): \pdfendlink ended up in different nesting level than \pdfstartlink.
+%
+% https://github.com/ho-tex/hyperref/issues/19
+% https://www.overleaf.com/help/246-what-does-slash-pdfendlink-ended-up-in-different-nesting-level-than-slash-pdfstartlink-mean
+%
+% To remove the hyperlink output to look in the PDF where a link is broken
+% on different columns:
+\hypersetup{draft}
 
 % Copyright
 %\setcopyright{none}
