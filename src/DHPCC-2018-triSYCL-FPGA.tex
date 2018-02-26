@@ -716,12 +716,12 @@ but this limitation should be removed soon.
 \label{sec:experiments-pipelined-dataflow}
 
 We have run various experiments on a benchmark transferring 2D arrays with
-and without these optimizations in SYCL, but also with non-single source
-HLS C++ or OpenCL C kernels, coming from
-\cite{Xilinx:GitHub:SDAccel_Examples}. The SYCL examples have been
-translated for this study from the HLS C++ and OpenCL examples, leading to
-quite shorter examples, typically less than 100 lines compared to the
-original 250+ line examples in HLS C++ or OpenCL C.
+(the code from Figure~\ref{fig:SYCL-dataflow}) and without these
+optimizations in SYCL, but also with non-single source HLS C++ or OpenCL C
+kernels, coming from \cite{Xilinx:GitHub:SDAccel_Examples}. The SYCL
+examples have been translated for this study from the HLS C++ and OpenCL
+examples, leading to quite shorter examples, typically less than 100 lines
+compared to the original 250+ line examples in HLS C++ or OpenCL C.
 
 \begin{figure}
   \includegraphics[width=\hsize]{Figures/dataflow_pipeline_kernel_exe_time}
@@ -775,6 +775,10 @@ different memory banks in a cyclic way (Figure~\ref{fig:cyclic-array}),
 partitioned by block (Figure~\ref{fig:block-array}) or fully partitioned
 (Figure~\ref{fig:complete-partition-array}) for a maximum bandwidth but at
 the cost of a very complex routing.
+
+
+\subsection{Extending SYCL to express array partitioning}
+\label{sec:extend-sycl-expr}
 
 Since in C++ there is a \lstinline|std::array| we introduced a new
 \lstinline|cl::sycl::xilinx::partition_array| similar to
@@ -887,6 +891,27 @@ xilinx::partition_array<float, 16,
 
 In a similar way a complete partitioning could be used as shown on
 Figure~\ref{fig:SYCL-complete-partition-array}.
+
+
+\subsection{Experiments using partitioned arrays}
+\label{sec:experiments-partitioned-arrays}
+
+We made some experiments in the same way as in
+\S~\ref{sec:experiments-pipelined-dataflow} with the SYCL code shown on
+Figure~\ref{fig:SYCL-partition-cyclic-block} and also with non-single
+source HLS C++ or OpenCL C kernels, coming from
+\cite{Xilinx:GitHub:SDAccel_Examples}.
+
+\begin{figure}
+  \includegraphics[width=\hsize]{Figures/array_partition_kernel_exe_time}
+  \caption{Comparison of execution times of matrix multiplication various
+    tools and languages with Xilinx FPGA acceleration card.}
+  \label{fig:matrix-multiplication-benchmark-comparison}
+\end{figure}
+
+The performance results are shown on
+Figure~\ref{fig:matrix-multiplication-benchmark-comparison} in the same
+context as \S~\ref{sec:experiments-pipelined-dataflow}.
 
 
 \section{SYCL and OpenCL interoperability mode}
