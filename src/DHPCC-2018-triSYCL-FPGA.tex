@@ -442,7 +442,7 @@ extensions to express these optimizations, such as
   Xilinx:UG1207-2017.4:SDAccel_Profiling_Optimization,
   Xilinx:UG1235-2017.4:SDSoC_Profiling_Optimization,
   Xilinx:UG1270-2017.4:HLS_Optimization_Methodology,
-  Xilinx:UG1253-2017.4:SDx_Pragma_Reference, altera}, based on
+  Xilinx:UG1253-2017.4:SDx_Pragma_Reference}, based on
 \lstinline|#pragma|, attributes or even configuration files or compiler
 options.
 
@@ -614,7 +614,7 @@ original 250+ line examples in HLS C++ or OpenCL C.
 \begin{figure}
   \includegraphics[width=\hsize]{Figures/dataflow_pipeline_kernel_exe_time}
   \caption{Comparison of execution times of 2D array transfers with
-    various tools and languages with Xilinx FPGA acceleration card.}
+    various tools and languages with a Xilinx FPGA acceleration card.}
   \label{fig:2D-array-benchmark-comparison}
 \end{figure}
 
@@ -631,8 +631,8 @@ using Clang/LLVM 3.9 and we used the Xilinx SDx OpenCL runtime 2017.2.
 \section{Array partitioning}
 \label{sec:array-partitioning}
 
-On FPGA even the memories are configurable and can be implemented with
-different level of parallelism, providing some trade-off between hardware
+On FPGA, even the memories are configurable and can be implemented with
+different levels of parallelism, providing some trade-off between hardware
 complexity (cost), bandwidth and latency.
 
 \begin{figure}
@@ -658,7 +658,7 @@ complexity (cost), bandwidth and latency.
   \label{fig:complete-partition-array}
 \end{figure}
 
-For example an array in a program on an FPGA can be distributed on
+For example, an array in a program on an FPGA can be distributed on
 different memory banks in a cyclic way (Figure~\ref{fig:cyclic-array}),
 partitioned by block (Figure~\ref{fig:block-array}) or fully partitioned
 (Figure~\ref{fig:complete-partition-array}) for a maximum bandwidth but at
@@ -668,15 +668,15 @@ the cost of a very complex routing.
 \subsection{Extending SYCL to express array partitioning}
 \label{sec:extend-sycl-expr}
 
-Since in C++ there is a \lstinline|std::array| we introduced a new
+Since in C++ there is a \lstinline|std::array|, we introduced a new
 \lstinline|cl::sycl::xilinx::partition_array| similar to
-\lstinline|std::array| but taking a new templated class parameter to
-model the partition.
+\lstinline|std::array| but taking a new templated class parameter to model
+the partition.
 
 For now we support only 1-dimension arrays similar to
 \lstinline|std::array| because we are waiting for the ISO C++
 standardization committee to define multidimensional arrays
-\cite{C++:P0xyzrv:md-span} so we can align on the same syntax.
+\cite{C++:P0009R5:mdspan} so we can align on the same syntax.
 
 \begin{figure*}
   \balloono{comment}{PartitionCyclicblockTriSYCL}{8}{9}
@@ -760,10 +760,10 @@ cgh.single_task<class add>([=,
   \label{fig:SYCL-partition-cyclic-block}
 \end{figure*}
 
-The example on Figure~\ref{fig:SYCL-partition-cyclic-block} show how
-partitioned arrays are used to speed-up the computation, in
-combination with pipelining, by reducing the bank conflicts even if
-the pipelining increase the bandwidth of the computation.
+The example on Figure~\ref{fig:SYCL-partition-cyclic-block} shows how
+partitioned arrays are used to speed-up the computation, in combination
+with pipelining, by reducing the bank conflicts even if the pipelining
+increase the bandwidth of the computation.
 
 \begin{figure}
   \begin{tabular}{c}
@@ -777,7 +777,7 @@ xilinx::partition_array<float, 16,
   \label{fig:SYCL-complete-partition-array}
 \end{figure}
 
-In a similar way a complete partitioning could be used as shown on
+In a similar way, a complete partitioning could be used as shown on
 Figure~\ref{fig:SYCL-complete-partition-array}.
 
 
@@ -793,7 +793,7 @@ source HLS C++ or OpenCL C kernels, coming from
 \begin{figure}
   \includegraphics[width=\hsize]{Figures/array_partition_kernel_exe_time}
   \caption{Comparison of execution times of matrix multiplication various
-    tools and languages with Xilinx FPGA acceleration card.}
+    tools and languages with a Xilinx FPGA acceleration card.}
   \label{fig:matrix-multiplication-benchmark-comparison}
 \end{figure}
 
