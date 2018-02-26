@@ -703,6 +703,34 @@ d_a = drt::accessor<decltype(a_a)> { a_a },
 but this limitation should be removed soon.
 
 
+\subsection{Experiments with pipelined and dataflow execution}
+\label{sec:experiments-pipelined-dataflow}
+
+We have run various experiments on a benchmark transferring 2D arrays with
+and without these optimizations in SYCL, but also with non-single source
+HLS C++ or OpenCL C kernels, coming from
+\cite{Xilinx:GitHub:SDAccel_Examples}. The SYCL examples have been
+translated for this study from the HLS C++ and OpenCL examples, leading to
+quite shorter examples, typically less than 100 lines compared to the
+original 250+ line examples in HLS C++ or OpenCL C.
+
+\begin{figure}
+  \includegraphics[width=\hsize]{Figures/dataflow_pipeline_kernel_exe_time}
+  \caption{Comparison of execution times of 2D array transfers with
+    various tools and languages with Xilinx FPGA acceleration card.}
+  \label{fig:2D-array-benchmark-comparison}
+\end{figure}
+
+When possible, we compared 2 different versions of the tools (Xilinx SDx
+2017.2 and 2017.4) that can also be configured to use either a Clang/LLVM
+3.1 or 3.9 front-end. The performance results are shown on
+Figure~\ref{fig:2D-array-benchmark-comparison} for a default kernel
+execution clock of 200~MHz with an ADM-PCIE-7V3 PCIe FPGA accelerator
+card~\cite{ADM-PCIE-7V3} plugged into an Ubuntu 17.10 Linux system with an
+Intel core i7-6700 CPU and 64~GB of RAM. The triSYCL device compiler is
+using Clang/LLVM 3.9 and we used the Xilinx SDx OpenCL runtime 2017.2.
+
+
 \section{Array partitioning}
 \label{sec:array-partitioning}
 
