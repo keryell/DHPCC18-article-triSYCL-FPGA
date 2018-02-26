@@ -238,11 +238,10 @@ allows a SYCL C++ application to recycle existing OpenCL kernels into
 a higher level C++ programming model, relieving the programmer from
 explicitly defining the memory transfers.
 
-In this article we present in Section~\ref{sec:sycl} the SYCL
-standard, then in Section~\ref{sec:sycl-opencl-inter} SYCL's interoperability mode with OpenCL, in
-Section~\ref{sec:exper-with-opencl} some experiments with the
-triSYCL open source implementation of the SYCL standard and comparing
-to some related work in Section~\ref{sec:related-work}.
+In this article we present in Section~\ref{sec:sycl} the SYCL standard,
+then in Section~\ref{sec:fine-grain-parallel} how to express pipelined and
+dataflow execution in SYCL and how dealing with partitioned arrays in
+Section~\ref{sec:array-partitioning}.
 
 
 \section{SYCL}
@@ -352,31 +351,7 @@ SYCL implements a single-source multiple compiler-passes design which
 offers the power of source integration while allowing tool-chains to
 remain flexible. This design supports embedding of code intended to be
 compiled for an OpenCL device, for example a GPU or an FPGA, inline
-with host code. This embedding of code offers three primary benefits:
-\begin{description}
-\item[simplicity:] for novice programmers, the separation of host and
-  device source code in OpenCL can become complicated to deal with,
-  particularly when similar kernel code is used for multiple different
-  operations. A single compiler flow and integrated tool chain
-  combined with libraries that perform a lot of simple tasks
-  simplifies initial OpenCL programs to a minimum complexity. This
-  reduces the learning curve for programmers new to OpenCL and allows
-  them to concentrate on parallelization techniques rather than
-  syntax;
-\item[reuse:] C++'s type system allows for complex interactions
-  between different code units and supports efficient abstract
-  interface design and reuse of library code.  For example, a C++
-  \lstinline{std::transform} or \lstinline{std::for_each} algorithm
-  applied to an array of data may allow specialization on both the
-  operation applied to each element of the array and on the type of
-  the data;
-\item[efficiency:] tight integration with the type system and reuse of
-  library code enables a compiler to perform inlining of code and to
-  produce efficient specialized device code based on decisions made in
-  the host code without having to generate kernel source strings
-  dynamically as done with other frameworks \cite{VexCL,
-    Boost.Compute}.
-\end{description}
+with host code.
 
 SYCL is a pure single-source C++ DSeL (Domain-Specific Embedded
 Language) providing simpler abstractions for heterogeneous
@@ -385,101 +360,13 @@ application using SYCL concepts to create a graph of 3 asynchronous
 tasks to initialize 2 matrices and addition them before checking for
 the final result.
 
-The main interesting features that SYCL brings are:
-\begin{description}
-
-\item[asynchronous task graphs] to break an application in parallel
-  pieces able to run on various accelerators or on the host, taking
-  advantage of the CPU cores and accelerators of the platform;
-
-\item[hierarchical parallelism] to take advantage inside a task of the
-  common intrinsic parallelism found in accelerators as shown on
-  Figure~\ref{fig:OpenCL-execution-model}, that can be expressed
-  either as in OpenCL with ND-ranges (multi-dimensional iteration
-  spaces) or in a similar hierarchical way to how it is done in OpenMP
-  \cite{OpenMP-5.0-preview-1}, but with a nicer C++-friendly method
-  based on lambda functions. The simpler hierarchical way relieves the
-  programmer from using painful work-group synchronizations and is
-  also more efficient on CPU and FPGA;
-
-  \begin{figure}
-    %\includegraphics[width=\hsize]{figures/execution-model-no_GPU}
-    \caption{OpenCL execution model, with the parallel iteration space
-      of work-groups of work-items mapped for execution onto independent
-    compute units composed of processing elements.}
-    \label{fig:OpenCL-execution-model}
-  \end{figure}
-
-\item[buffers] defining location-independent storage, (no explicit
-  move) usable as multi-dimensional arrays to be used from the various
-  CPU cores and accelerators;
-
-\item[accessors] to express usage for buffers and other objects with
-  some attributes such as read/write/\ldots, the location or the kind
-  of memory to use, allowing finer control on the complex memory
-  hierarchy found on accelerators as shown on
-  Figure~\ref{fig:OpenCL-memory-model} to reach the maximum power and
-  compute efficiency;
-
-  \begin{figure}
-    %\includegraphics[width=\hsize]{figures/memory-model}
-    \caption{OpenCL memory model, with the 4 different explicit kinds
-      of memory, besides the host memory.}
-    \label{fig:OpenCL-memory-model}
-  \end{figure}
-
-\item[implicit dependency graph] construction is done with the
-  separation in SYCL of the data access from data storage. By relying
-  on the C++-style RAII (resource acquisition is initialization) idiom
-  on accessors, the runtime library can capture data dependencies
-  between device code blocks and construct the task graph implicitly
-  with all the dependencies;
-
-\item[automatic data motion] is then done by the runtime by tracking
-  the data through the accessors ahead of time, making sure the data
-  are available when needed by a kernel on a device or by the host,
-  without the programmer requiring like in OpenCL or in CUDA to
-  explicitly move the data;
-
-\item[overlapping kernels and communications] is provided
-  automatically by the SYCL scheduler by using the dependency graph
-  between tasks without requiring the programmer to manage explicitly
-  several command queues and synchronizing events for this;
-
-\item[single-source] programming model, similar to OpenMP
-  simplicity and type safety but in a pure C++-friendly world, without
-  requiring \lstinline{#pragma} that do not compose nicely with
-  C++. This allows the writing of high-level programming and
-  meta-programming. For example on the Figure~\ref{fig:SYCL-example},
-  except in the buffer creations on lines 17--19, the data type does
-  not appear anywhere in the code and is just inferred by the compiler
-  even across the host-device boundary;
-
-\item[host fallback] is a by-product of having a pure C++ DSeL. By
-  just providing a C++ implementation of the SYCL runtime on the
-  host. Thus the same code can work either on the host CPU or on the
-  device, allowing more parallelism but also just to run even if a
-  device is missing;
-
-\item[host debugging] for free is a nice side-effect of the host
-  implementation of SYCL. The development of heterogeneous
-  applications is quite challenging but having the same code running
-  on the host allows the use of the normal C++ development tools
-  chains, from high-end static analysis tools, dynamic thread or
-  memory checkers, debuggers, watch-points, etc.  down to inserting
-  plain standard I/O messages in the code;
-
-\item[host emulation] is also for free, which interesting in the case
-  of the FPGA world where synthesizing the code for the device
-  is an offline activity compared to running the code on CPU or even on GPU;
-
-\item[cross-platform] support allows to have buffers used by different
-  devices from different vendors in a seamless way, which is not
-  possible directly in OpenCL.
-
-  % Skip on purpose the OpenCL interoperability mode here
-
-\end{description}
+The main interesting features that SYCL brings are asynchronous task
+graphs, hierarchical parallelism, buffers defining location-independent
+storage, accessors to express usage for buffers and other objects,
+implicit dependency graph, automatic data motion, automatic overlapping
+kernels and communications, single-source, host fallback for debugging or
+when no accelerator is available and cross-platform (buffers used by
+different devices from different vendors), OpenCL interoperability mode.
 
 SYCL retains the execution model, runtime feature set and device
 capabilities of the underlying OpenCL standard. This is why SYCL
@@ -501,12 +388,12 @@ virtual function calls, function pointers in general, exceptions,
 runtime type information or the full set of C++ libraries that may
 depend on these features or on features of a particular host compiler.
 
-These features are not often used in high-performance code even
-in plain C++ in the hot-path because of performance issues.
-Fortunately, the use of C++ features such as templates and inheritance
-on top of the OpenCL execution model opens a wide scope for innovation
-in software design for heterogeneous systems, giving workarounds for
-some of the unsupported features.
+Actually these features are anyway often used in C++ high-performance code
+in the hot-path because of performance issues.  Fortunately, the use of
+C++ features such as templates and inheritance on top of the OpenCL
+execution model opens a wide scope for innovation in software design for
+heterogeneous systems, giving workarounds for some of the unsupported
+features.
 
 Clean integration of device and host code within a single C++ type
 system enables the development of modern, templated libraries that
