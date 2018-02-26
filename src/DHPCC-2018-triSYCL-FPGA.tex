@@ -627,6 +627,16 @@ card~\cite{ADM-PCIE-7V3} plugged into an Ubuntu 17.10 Linux system with an
 Intel core i7-6700 CPU and 64~GB of RAM. The triSYCL device compiler is
 using Clang/LLVM 3.9 and we used the Xilinx SDx OpenCL runtime 2017.2.
 
+The performance of triSYCL are quite reasonable compared to some other
+programming models and tools, and sometimes even gives the best
+result. This shows that higher-level programming model does not mean
+always trading programmability with execution efficiency, for example
+because the single-source approach provides to the compiler a global
+interprocedural view between host code and device code, allowing for
+example some variable that appears to be a constant on the host-side to be
+directly evaluated on the device code without requiring some explicit
+host-device PCIe data transfer as for OpenCL or HLS C++.
+
 
 \section{Array partitioning}
 \label{sec:array-partitioning}
@@ -802,501 +812,42 @@ Figure~\ref{fig:matrix-multiplication-benchmark-comparison} in the same
 context as \S~\ref{sec:experiments-pipelined-dataflow}.
 
 
-\section{SYCL and OpenCL interoperability mode}
-\label{sec:sycl-opencl-inter}
-
-SYCL is a very generic data-parallel task graph model implemented as a
-C++ DSeL that often relies on OpenCL and SPIR behind the hood to
-target accelerators, but it could use some other technology.
-
-There is also in SYCL a specific OpenCL interoperability mode if
-needed, allowing direct interaction with the OpenCL world, and by
-transitivity to Vulkan/OpenGL/DirectX/... In this way it is possible
-to use existing programs or libraries with no overhead.
-
-There are 2 main parts in the interoperability mode:
-\begin{enumerate}
-\item it is possible to construct SYCL objects from existing OpenCL
-  objects to run SYCL single-source programs in relation with an
-  existing OpenCL framework. For example a SYCL buffer can be
-  constructed from an OpenCL \lstinline|cl_mem| or SYCL queue from a
-  \lstinline|cl_command_queue|;
-\item it is possible to get some OpenCL objects from higher-level SYCL
-  objects to execute plain OpenCL code from the SYCL world, for
-  example launching an OpenCL kernel that uses an implicit
-  \lstinline|cl_mem| associated to a SYCL accessor.
-\end{enumerate}
-
-Whereas the interoperability mode was included in the SYCL standard to
-extend the applicability of SYCL on the OpenCL realm, it appears that
-this mode is useful by itself to do plain OpenCL programming in higher
-level C++, in the same way there already exists various C++ OpenCL
-wrapper.
-
-While it does not take advantage from the single-source programming
-style of SYCL, it has some value for OpenCL programmers as it
-simplifies the boilerplate and housekeeping. For example, it allows to
-use the task graph model on top of OpenCL kernels and the synergy
-between buffers and accessors relieves the programmer from managing
-explicitly the buffer content transfers between host and devices.
-
-In the following we present some use case of OpenCL interoperability
-using the triSYCL implementation.
-
-
-\section{Experimenting OpenCL interoperability mode of SYCL with
-  triSYCL}
-\label{sec:exper-with-opencl}
-
-triSYCL \cite{triSYCL} is an open-source implementation based on C++17
-and various Boost libraries \cite{Boost-1.63}. The host acceleration
-is provided with OpenMP. The device compiler used to outline the
-kernels in single-source mode is based on Clang \cite{Clang-4.0}/LLVM
-\cite{LLVM-4.0}. The OpenCL interoperability mode is based on
-Boost.Compute \cite{Boost.Compute}.
-
-To even simplify further the programming style, triSYCL
-implements Boost.Compute interoperability mode too, as an extension to
-the SYCL standard.
-
-
-\begin{figure*}
-  \begin{tabular}{c}
-    \begin{lstlisting}[basicstyle=\scriptsize]
-  [...]
-
-int search_image(buffer<int>& training, const Img& img, queue& q, const kernel& k) {
-  int res[training_set_size];
-
-  {
-    buffer<int> A { std::begin(img.pixels), std::end(img.pixels) };
-    buffer<int> B { res, training_set_size };
-    // Compute the L2 distance between an image and each one from the
-    // training set
-    q.submit([&] (handler &cgh) {
-        // Set the kernel arguments. The accessors lazily trigger data
-        // transfers between host and device only if necessary. For
-        // example "training" is only transfered the first time the
-        // kernel is executed.
-        cgh.set_args(training.get_access<access::mode::read>(cgh),
-                     A.get_access<access::mode::read>(cgh),
-                     B.get_access<access::mode::discard_write>(cgh),
-                     int { training_set_size }, int { pixel_number });
-        // Launch the kernel with training_set_size work-items
-        cgh.parallel_for(training_set_size, k);
-      });
-    // The destruction of B here waits for kernel execution and copy
-    // back the data to res
-  }
-
-  // Find the image with the minimum distance
-  auto min_image = std::min_element(std::begin(res), std::end(res));
-
-  // Test if we found the correct digit
-  return
-    training_set[std::distance(std::begin(res), min_image)].label == img.label;
-}
-
-int main(int argc, char* argv[]) {
-  int correct = 0;
-  training_set = slurp_file("data/trainingsample.csv");
-  validation_set =  slurp_file("data/validationsample.csv");
-  buffer<int> training_buffer = get_buffer(training_set);
-
-  // A SYCL queue to send the heterogeneous work-load to
-  queue q { boost::compute::system::default_queue() };
-
-  // Use real OpenCL program for the kernel
-  auto program = boost::compute::program::create_with_source(R"(
-    __kernel void kernel_compute(__global const int* trainingSet,
-                                 __global const int* data,
-                                 __global int* res, int setSize, int dataSize) {
-      int diff, toAdd, computeId;
-      computeId = get_global_id(0);
-      if (computeId < setSize) {
-        diff = 0;
-        for (int i = 0; i < dataSize; i++) {
-            toAdd = data[i] - trainingSet[computeId*dataSize + i];
-            diff += toAdd * toAdd;
-        }
-        res[computeId] = diff;
-      }
-    }
-    )", boost::compute::system::default_context());
-
-  program.build();
-
-  // Construct a SYCL kernel from OpenCL kernel to be used in
-  // interoperability mode
-  kernel k { boost::compute::kernel { program, "kernel_compute"} };
-
-  // Match each image from the validation set against the images from
-  // the training set
-  for (auto const & img : validation_set)
-    correct += search_image(training_buffer, img, q, k);
-
-  [...]
-
-  return 0;
-}
-    \end{lstlisting}
-  \end{tabular}
-  \caption{Digit recognition application using SYCL with OpenCL
-    interoperability mode.\label{fig:digit-SYCL-OpenCL-code}}
-\end{figure*}
-
-We have used triSYCL to simplify the OpenCL host-side programming of
-some machine learning examples.
-
-
-\subsection{Handwritten digit recognition in gray images using L2
-  norm}
-\label{sec:example-from-anast}
-
-To benchmark various languages and frameworks, we used an application
-for recognition of handwritten digits in 8-bit gray images of
-$28 \times 28$ pixels.
-
-There are 500 images compared against a training reference
-set of labeled digit images. A kernel is launched to compare each
-image against all the reference images.
-
-\begin{figure}
-  \begin{tikzpicture}
-    \begin{axis}[
-        ybar,
-        axis on top,
-        ymax=1.2, ymin=0,
-        height=6cm,
-        width=\hsize,
-        enlarge x limits=0.12,
-        ymajorgrids,
-        tick align=outside,
-        major grid style={draw=none},
-        axis x line*=left,
-        ylabel={ms},
-        xtick={triSYCL OMP,triSYCL OCL,ComputeCPP,OpenCL},
-        max space between ticks=30pt,
-        x tick label style={/pgf/number format/1000 sep=},
-        legend style={at={(0.5,-0.15)},
-        anchor=north,legend columns=-1},
-        bar width=6pt,
-        symbolic x coords={triSYCL OMP,triSYCL OCL,ComputeCPP,OpenCL},
-        nodes near coords=\rotatebox{90}{\scriptsize\pgfmathprintnumber
-          \pgfplotspointmeta}
-        ]
-        \addplot[plot 0,bar group size={0}{4}]
-        coordinates {(triSYCL OMP,0.99)};
-        \addplot[plot 0,bar group size={1}{4}]
-        coordinates {(triSYCL OMP,0.75)};
-        \addplot[plot 1,bar group size={2}{4}]
-        coordinates {(triSYCL OMP,0.75)};
-        \addplot[plot 1,bar group size={3}{4}]
-        coordinates {(triSYCL OMP,0.43)};
-
-        \addplot[plot 2,bar group size={0}{4}]
-        coordinates {(triSYCL OCL,0.48)};
-        \addplot[plot 2,bar group size={1}{4}]
-        coordinates {(triSYCL OCL,0.44)};
-        \addplot[plot 3,bar group size={2}{4}]
-        coordinates {(triSYCL OCL,0.47)};
-        \addplot[plot 3,bar group size={3}{4}]
-        coordinates {(triSYCL OCL,0.44)};
-
-        \addplot[plot 4,bar group size={0}{1}]
-        coordinates {(ComputeCPP,0.77)};
-
-        \addplot[plot 5,bar group size={0}{1}]
-        coordinates {(OpenCL,0.42)};
-
-    \end{axis}
-  \end{tikzpicture}
-  \caption{Average total execution time for digit recognition
-    application per image running OpenCL and SYCL kernels with different host
-    API and configurations on a CPU.}
-  \label{fig:results-digit-recognition}
-\end{figure}
-
-The examples are run on a CPU because it was the only common target of
-all the tested tools. The performance observed is show in figure
-Figure~\ref{fig:results-digit-recognition}.
-
-The details of Figure~\ref{fig:results-digit-recognition} are as follows,
-the first two groups of bar graphs represent the observed execution times
-with triSYCL using OpenMP for parallelism and triSYCL in OpenCL interoperability
-mode. The first two darker bars for each triSYCL mode represent the execution
-time when compiled with GCC while the last two represent the execution time when
-compiled with clang. The difference between the bars of the same color is that
-the left bar represents the execution time with asynchronous kernel execution
-enabled while it is disabled in the time shown with the second bar (see
-Section~\ref{sec:profiling} for details).
-Finally the last two purple and red bars represent the execution time observed
-with ComputeCPP and with a ``pure'' OpenCL implementation.
-
-
-The version written in pure single-source SYCL C++ was run with
-triSYCL based on OpenMP and with the free community edition of
-ComputeCpp \cite{ComputeCpp}, the major SYCL implementation
-\cite{ComputeCpp} targeting OpenCL with SPIR. The version with the
-kernel written in OpenCL C directly is run either with the OpenCL host
-API directly or with triSYCL and OpenCL interoperability mode.
-
-triSYCL in OpenCL interoperability mode and the pure OpenCL version run
-the same OpenCL kernel while triSYCL with OpenMP and ComputeCpp run the
-same SYCL kernel.
-
-The data sets can be found on
-\url{https://github.com/a-doumoulakis/triSYCL_knn} for further
-inspection.
-
-The main part of the SYCL with OpenCL interoperability version is
-shown on Figure~\ref{fig:digit-SYCL-OpenCL-code}. Even if the kernel is
-described as OpenCL code with the help of Boost.Compute
-\cite{Boost.Compute} for conciseness, the data are still stored in
-SYCL buffers and their usages are precised by some SYCL
-accessors. Compared to the pure SYCL version found in
-\url{https://github.com/a-doumoulakis/triSYCL_knn/blob/master/knn_trisycl.cpp},
-we built a SYCL kernel from the OpenCL kernel and inside
-\lstinline|q.submit()| the \lstinline|cgh.set_args()| connects the
-SYCL world to the OpenCL kernel world, connecting the SYCL accessors
-to some OpenCL \lstinline|cl_mem| provided to the OpenCL kernel during
-execution. The OpenCL kernel is still scheduled asynchronously by the
-SYCL runtime according to the task graph as would be a normal SYCL
-kernel.
-
-Even if there is no explicit OpenCL buffer motion between host and
-device, the SYCL run-time uses the dependency graph constructed by the
-accessors to move or not to move the data for kernel execution.
-
-All the measurements were made on the same Linux machine (i7-6700
-with 32~GB of RAM) with Ubuntu 16.10, GCC 6.2, Clang 3.8.1
-The OpenCL runtime running on the intel CPU was the intel-opencl-runtime 16.1.1
-The compiler options can be seen at the GitHub project page.
-
-ComputeCpp on this example is a little bit less performing than the
-pure OpenCL solution but does quite well if considered the
-productivity gain and that the tool is still a beta version 0.1.3.
-
-triSYCL with OpenMP is not yet optimized on GCC since the project was more
-focused up-to-now on experimenting with the specification rather than
-towards the performance. But we plan to use the SIMD mode of OpenMP 4
-to increase the performances. The Clang implementation of OpenMP already
-uses SIMD when running the kernels making the performance similar to OpenCL.
-
-
-\subsection{Performance profiling of triSYCL}
-\label{sec:profiling}
-As we have seen with the performance comparison on the knn example,
-further improvement can be made to triSYCL to get better performance
-both with the OpenCL interoperability mode and with OpenMP parallelism.
-
-In the knn example, we execute a great number of small kernels
-(one kernel for each image in the reference set, 500 kernels in total,
-with each execution of a kernel taking less than 1ms),
-this has highlighted a performance inefficiency in triSYCL.
-
-The current way to add a task in the asynchronous task graph in triSYCL,
-is for the main thread to create a new thread for each task,
-and then detach it. The new thread will launch the kernel and synchronize by
-its own means, so there is no need for the main thread to monitor
-its execution. The problem comes when, just like in our example,
-the number of tasks is great and the execution time of each task is small.
-We can come across situations when we spend more time creating threads
-than actually executing them. When executing the kernels with asynchronous 
-kernels disabled, the number of threads created decreases dramatically, 
-hence the performance improvement observed 
-in Figure~\ref{fig:digit-SYCL-OpenCL-code}. 
-
-We ran the example with Intel's OpenCL implementation on CPU that uses TBB
-as a backed. With Intel VTune can we profile the execution and we observe
-that Intel's OpenCL runtime creates 7 TBB worker threads that will execute
-the kernels, meanwhile the main triSYCL thread will, for each kernel execution,
-create a thread that will launch the computation of the kernel on the
-TBB worker threads. We end up creating more than 500 threads during the
-execution of the example with most of these threads delegating the computation
-to the TBB workers and doing very little work themselves.
-
-This issue is highlighted even more when using OpenMP. Instead of just using
-a pool of existing threads to make the computation, OpenMP creates 8 threads
-to execute the workgroups for every execution of a kernel. Again, similarly to
-the OpenCL case we create many threads that have a very short lifespan,
-for the execution of 500 kernels, 4000 threads are created.
-
-Furthermore, GCC and Clang do not use the same OpenMP library (libgomp for GCC 
-and libomp for Clang), Clang reuses existing threads instead of creating new 
-ones, this brings the time spent creating threads down and thus an increase
-in performance.
-
-The solution to this problem is straight forward, there need to be a way to
-reuse threads instead of creating them when possible. This can be achieved
-by using a thread pool or a similar mechanism that allows us to assign a task
-to an existing thread and monitor the tasks with futures and promises.
-Doing that will greatly decrease the amount of time spent creating and
-synchronizing the threads between them.
-
-
-\subsection{Binary Neural Network for image classification on FPGA}
-\label{sec:example-from-ken}
-
-\begin{table}
-  \caption{Performance results (ms) of the BNN application for 2 host
-    API.}
-  \begin{tabular}{|c|c|c|c|c|c|}
-    \cline{2-6}
-    \multicolumn{1}{c|}{}&   \textit{Setup}      & \textit{Memory} & \textit{Build}  & \textit{Kernel} & \textit{Total} \\\hline
-    OpenCL& 6490.22     &     .08& 4598.1   & 4.011 &11092.43 \\\hline
-    SYCL  & 6411.32     & .002   & 4903.65  & 3.91  &11325.57 \\\hline
-  \end{tabular}
-  \label{tbl:perfbnn}
-\end{table}
-
-\begin{figure*}
-  \begin{tabular}{c}
-    \begin{lstlisting}[basicstyle=\scriptsize]
-[...]
-  buffer<long> inputBuffer { inputVector, numInputElems };
-  {
-    buffer<long> outputBuffer { outputVector, numOutputElems };
-    queue.submit([&] (handler &cgh) {
-      cgh.setArgs(inputBuffer.get_access<access::mode::read>(cgh),
-                  outputBuffer.get_access<access::mode::write>(cgh),
-                  false, 0, 0, 0, 0L, count);
-      cgh.single_task(kernel);
-    });
-  }
-[...]
-\end{lstlisting}
-\end{tabular}
-\caption{BNN kernel launch using SYCL host API with OpenCL interoperability.}
-\label{fig:syclbnn}
-\end{figure*}
-
-\begin{figure*}
-  \begin{tabular}{c}
-    \begin{lstlisting}[basicstyle=\scriptsize]
-[...]
-  queue.enqueueWriteBuffer(inputBuffer, CL_TRUE, 0, numInputElems, inputVector, NULL, &event);
-  kernel.setArgs(0, inputBuffer);
-  kernel.setArgs(1, outputBuffer);
-  kernel.setArgs(2, false);
-  kernel.setArgs(3, 0);
-  kernel.setArgs(4, 0);
-  kernel.setArgs(5, 0);
-  kernel.setArgs(6, 0L);
-  kernel.setArgs(7, count);
-  queue.enqueueTask(kernel, NULL, &event);
-  queue.enqueueReadBuffer(outputBuffer, CL_TRUE, 0, numOutputElems, outputVector, NULL, &event);
-[...]
-\end{lstlisting}
-\end{tabular}
-\caption{BNN kernel launch using OpenCL host API.}
-\label{fig:openclbnn}
-\end{figure*}
-
-
-In our second example, we present the performance results of a binary
-neural network based application, which can accelerate its computation
-on an FPGA using SYCL or OpenCL APIs. The SYCL implementation uses
-triSYCL with OpenCL interoperabilty mode or by using directly the Xilinx OpenCL implementation, SDAccel. In this particular application, image data is passed as an input to the accelerator for classification. The output is a label of what the image contains.
-
-The kernel code of the application is written in High Level Synthesis
-C++, which, when synthesized for the FPGA, acts as a built-in OpenCL
-binary kernel that is loaded by either SYCL or OpenCL runtimes.
-
-In Figures~\ref{fig:syclbnn} and \ref{fig:openclbnn}, we display the differences in kernel execution code section of the OpenCL and SYCL implementations. In the case of the SYCL implementation, when the \textit{inputBuffer} is created, its data is loaded from the host to the device from \textit{inputVector}. The code following this is contained within braces, ensuring the kernel has completed execution and the data from the output has been copied back to the host to the \textit{outputVector} before executing subsequent code. The kernel arguments are also set with a single variadic function call. In the case of the OpenCL implementation, copies between host and device are explicit and kernel arguments must be set individually. 
-
-In Table~\ref{tbl:perfbnn}, we report the performance of four critical sections our application and the total execution time for each. The results are an average of 10 executions. Measurements are taken from the wall clock using a high resolution timer. \textit{Setup} accounts for the time to acquire an OpenCL platform, device, context and queue. \textit{Memory} accounts of the buffer allocation time of the input and output. \textit{Build} describes the time taken to read the binary kernel file from disk, build an OpenCL program, and, from it, instantiate the kernel. For both cases, this includes the reconfiguration of the FPGA. \textit{Kernel} accounts for the execution of the kernel, including the setting of arguments and launch. Finally, \textit{Total} accounts for the entirety of the accelerated section, from setup until the results are returned to the host.
-
-
-Our findings with this example is that SYCL with OpenCL interoperability mode is competitive with directly using OpenCL, with the exception of a small one-time overhead during the build phase. We are currently working to resolve this issue. Encouragingly, the kernel performance between both are comparable.
-
-The memory allocation time is shown as negligible for SYCL compared to
-OpenCL because it is done lazily by the runtime and is moved into the
-kernel execution time slot.
-
-
-\section{Related work}
-\label{sec:related-work}
-
-The problems addressed here are really meaningful if we consider all
-the frameworks developed by a lot of people using heterogeneous
-computing. This also means it is impossible to be exhaustive, even by
-looking at the C++ frameworks only.
-
-The natural candidate is the second version of the official C++
-wrapper from Khronos, \texttt{cl2.hpp} \cite{cl2.hpp}. It is a
-straightforward C++ mapping around the OpenCL C API, at least managing
-the lifetime of the OpenCL using RAII mechanism. There is a variadic
-C++ API to launch kernels, but it is not very high-level compared
-to plain OpenCL. Since it is a basic C++ API, this API is often
-used by other higher-level API.
-
-For example Boost.Compute \cite{Boost.Compute} is built on top of the
-basic previous one and offers also OpenCL API in a C++ mood.
-Boost.Compute is actually 2 different API. A basic layer is like
-\texttt{cl2.hpp} but in a more modern C++ and STL mind. This is why it
-is used by triSYCL. But there is also a higher level API, with
-parallel STL-like algorithms operating on device vectors. But there is
-no transparent motion of the data of these device vectors between host
-and device.
-
-VexCL \cite{VexCL} is higher-level than Boost.Compute since it can
-target both OpenCL or CUDA. It provides parallel STL algorithms with
-vectors that can be spread across several devices. There is some
-support to generate kernels by using symbolic execution. But there is
-still some explicit copying required between device vectors and the host domain.
-
-Google contributed the Acxxel library \cite{Acxxel-4.0} inside the
-LLVM compiler runtime \texttt{parallel-libs}. It allows programmers to manage
-OpenCL and CUDA devices and to launch kernels on them, while unifying
-most of the similar concepts on the host side within a unique
-syntax. There is no dependency graph between tasks and thus the
-transfers between host and devices are still to be done by the
-programmer.
+The performance of triSYCL are here also quite reasonable compared to some
+other programming models and tools, while never reaching the best
+performance but for the unoptimized case.
 
 
 \section{Conclusion}
 \label{sec:conclusion}
 
-Heterogeneous computing in embedded and high-performance computing is
-here to stay because of physical constraints. This puts the pressure on
-the programmers to integrate a full system across the various
-accelerators. The SYCL standard C++ DSeL allows a single-source
-approach for both host and accelerators parts in type-safe way to
-simplify the process while interoperable with the ubiquitous C/C++
-world. The SYCL runtime provides an implicit task graph managing
-asynchronicity and data transfers across the various memory spaces.
+C++ provides direct mapping to hardware and zero-overhead abstraction, as
+summarized by Bjarne Stroustrup in 2 lines. With modern C++, there are
+less reasons to choose between ``slow and convenient'' and ``fast and
+hard-to-use'' programming models and we are seeing more an evolution from
+``fast and hard-to-use'' towards a ``fast and easy-to-use'' paradigm.
 
-Besides this very general programming model, SYCL provides also
-interoperability with the OpenCL world, allowing to launch existing
-OpenCL kernels while taking advantage of the SYCL framework. While no
-longer a single-source programming model in that case, it still
-provides the implicit task graph with buffers and accessors, relieving
-the programmer to manage explicitly the buffers and memory transfers
-between the host and the devices.
+At the same time, heterogeneous computing in embedded and high-performance
+computing is here to stay because of physical constraints. This puts the
+pressure on the programmers to integrate a full system across the various
+accelerators. The SYCL standard C++ DSeL allows a single-source approach
+for both host and accelerators parts in type-safe way to simplify the
+process while interoperable with the ubiquitous C/C++ world. The SYCL
+runtime provides an implicit task graph managing asynchronicity and data
+transfers across the various memory spaces.
 
-This interoperability mode in the SYCL standard has some value by
-itself even if this role was not envisioned in the first place. It
-allows to use SYCL as a high-level framework to run existing OpenCL
-kernels (even built-in kernels controlling networking devices on
-FPGA) using a pure C++ approach without the need of a device compiler.
+SYCL is one of the candidates inside the ISO C++ committee to push more
+heterogeneous computing as a first-class citizen into the language and is
+an experimental sand-box to show-case new non-functional concepts such as
+the pipelining/dataflow execution models or the way some arrays are
+implemented. Our experiments with triSYCL show that it is competitive with
+other more conventional programming tools and languages.
 
-The open-source triSYCL implementation \cite{triSYCL} we are working
-on provides also this interoperability mode, as shown with the
-application samples presented in this article and the performance
-comparisons with other frameworks.
-
-While the performance is generally not better with SYCL than with
-plain OpenCL kernels using the OpenCL host API, SYCL increases the
-programmer's productivity with the single-source type-safe programming
-model for both host code and kernel code and the task graph model with
-implicit data transfers.
-
-When interoperability with existing OpenCL code or OpenCL-compatible
-kernels is required, for example with FPGA kernels programmed directly
-in RTL or HLS C++, the OpenCL interoperability mode of SYCL provides a
-nicer host API, simpler to use than the usual OpenCL ones, without
-requiring a specific SYCL device compiler.
+With even more modern meta-programming features comping into C++ such as
+introspection and generative programming
+\cite{C++:P0194R5:static-reflection,
+  C++:P0707R3:metaclasses-generative-C++}, this brings directly at the C++
+level some system-wide design capabilities with some software-hardware
+trade-offs, without requiring some external generative tools
 
 
 \bibliographystyle{ACM-Reference-Format}
