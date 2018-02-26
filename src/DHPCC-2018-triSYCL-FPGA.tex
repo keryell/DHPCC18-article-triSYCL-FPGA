@@ -32,7 +32,7 @@
 %
 % To remove the hyperlink output to look in the PDF where a link is broken
 % on different columns:
-\hypersetup{draft}
+%\hypersetup{draft}
 
 % Copyright
 %\setcopyright{none}
@@ -849,7 +849,12 @@ introspection and generative programming
 level some system-wide design capabilities with some software-hardware
 trade-offs, without requiring some external generative tools
 
-
+%\clearpage
+% Actually a new column, to avoid an URL in the bibliography to be broken
+% across pages triggering the bug
+% https://github.com/ho-tex/hyperref/issues/19 mentionned in the
+% preamble...
+\newpage
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{biblio}
 
