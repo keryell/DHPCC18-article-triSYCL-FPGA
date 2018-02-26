@@ -428,10 +428,10 @@ presented at C++ F2F committee Jacksonville 2016/02
 \label{sec:fine-grain-parallel}
 
 High-level programs on FPGA are typically compiled with each operation
-translated in some hardware implementation. Compare to the compilation for
-architectures with fixed hardware functions such as CPU, DSP or GPU, that
-means that the hardware implementations of the operations do coexist in
-space inside the FPGA, which means that they can be used in parallel to
+translated in some hardware implementation. Compared to the compilation
+for architectures with fixed hardware functions such as CPU, DSP or GPU,
+that means that the hardware implementations of the operations do coexist
+in space inside the FPGA, which means that they can be used in parallel to
 increase the throughput of the system.
 
 In a ``normal'' computer this is not a parameter to be taken in
@@ -497,7 +497,7 @@ void compute(T *buffer_in, U *buffer_out) {
   \label{fig:SYCL-pipelined}
 \end{figure}
 
-As shown on Figure~\ref{fig:SYCL-pipelined} we chose to mark a zone to be
+As shown on Figure~\ref{fig:SYCL-pipelined}, we chose to mark a zone to be
 pipelined with a kind of decorator \emph{à la} Python
 \cite{Python:PEP318:decorators} \lstinline|xilinx::pipeline(...)| taking a
 functor, typically expressed in modern C++ as a lambda expression.
@@ -521,7 +521,7 @@ execute in parallel and if data dependencies allow it, data can move from
 one function to another either using dual-buffering ping-pong buffers
 (preventing the time-consuming and power-hungry external memory) or even a
 FIFO (preventing the use of more complex power-hungry memory access), as
-shown on \ref{fig:dataflow-execution}.
+shown on Figure~\ref{fig:dataflow-execution}.
 
 \begin{figure}
   \balloon{comment}{DataFlowTriSYCL}{5}{5}
@@ -603,12 +603,13 @@ but this limitation should be removed soon.
 \label{sec:experiments-pipelined-dataflow}
 
 We have run various experiments on a benchmark transferring 2D arrays with
-(the code from Figure~\ref{fig:SYCL-dataflow}) and without these
-optimizations in SYCL, but also with non-single source HLS C++ or OpenCL C
-kernels, coming from \cite{Xilinx:GitHub:SDAccel_Examples}. The SYCL
-examples have been translated for this study from the HLS C++ and OpenCL
-examples, leading to quite shorter examples, typically less than 100 lines
-compared to the original 250+ line examples in HLS C++ or OpenCL C.
+and without these optimizations in SYCL (code from
+Figure~\ref{fig:SYCL-dataflow}), but also with non-single source HLS C++
+or OpenCL C kernels, coming from
+\cite{Xilinx:GitHub:SDAccel_Examples}. The SYCL examples have been
+translated for this study from the HLS C++ and OpenCL examples, leading to
+quite shorter examples, typically less than 100 lines compared to the
+original 250+ line examples in HLS C++ or OpenCL C.
 
 \begin{figure}
   \includegraphics[width=\hsize]{Figures/dataflow_pipeline_kernel_exe_time}
