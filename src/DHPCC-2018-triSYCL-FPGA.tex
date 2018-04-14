@@ -434,14 +434,13 @@ increase the throughput of the system.
 In a ``normal'' computer this is not a parameter to be taken in
 consideration, but for FPGA this is something useful to express somehow,
 when compiling a C/C++ program for FPGA. Each FPGA vendor have some
-extensions to express these optimizations, such as
-\cite{IWOCL2016:OpenCL_Xilinx_FPGA,
+extensions to express these optimizations based on
+\lstinline|#pragma|, attributes or even configuration files or compiler
+options \cite{IWOCL2016:OpenCL_Xilinx_FPGA,
   Xilinx:UG1207-2017.4:SDAccel_Profiling_Optimization,
   Xilinx:UG1235-2017.4:SDSoC_Profiling_Optimization,
   Xilinx:UG1270-2017.4:HLS_Optimization_Methodology,
-  Xilinx:UG1253-2017.4:SDx_Pragma_Reference}, based on
-\lstinline|#pragma|, attributes or even configuration files or compiler
-options.
+  Xilinx:UG1253-2017.4:SDx_Pragma_Reference},
 
 The issues  with extensions such  as \lstinline|#pragma| or  attributes is
 that they require a specific compiler  to parse and understand them.  This
@@ -610,7 +609,7 @@ original 250+ line examples in HLS C++ or OpenCL C.
 
 \begin{figure}
   \includegraphics[width=\hsize]{Figures/dataflow_pipeline_kernel_exe_time}
-  \caption{Comparison of execution times of 2D array transfers with
+  \caption{Comparison of execution times (ms) of 2D array transfers with
     various tools and languages with a Xilinx FPGA acceleration card.}
   \label{fig:2D-array-benchmark-comparison}
 \end{figure}
@@ -807,7 +806,7 @@ source HLS C++ or OpenCL C kernels, coming from
 
 \begin{figure}
   \includegraphics[width=\hsize]{Figures/array_partition_kernel_exe_time}
-  \caption{Comparison of execution times of matrix multiplication various
+  \caption{Comparison of execution times (ms) of matrix multiplication various
     tools and languages with a Xilinx FPGA acceleration card.}
   \label{fig:matrix-multiplication-benchmark-comparison}
 \end{figure}
@@ -849,7 +848,9 @@ with triSYCL show that it has the potential to be competitive with
 other more conventional programming tools and languages, even if it is
 only done with a research prototype and we have not looked deeply in
 the understanding of the current performance results among the
-different tools and their versions.
+different tools and their versions. We plan to work on better
+understanding the performance results while our tools make progress
+and to experiment with bigger applications.
 
 With even more modern meta-programming features comping into C++ such as
 introspection and generative programming
