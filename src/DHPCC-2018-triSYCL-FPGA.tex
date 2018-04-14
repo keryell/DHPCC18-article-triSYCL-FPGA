@@ -534,31 +534,31 @@ shown on Figure~\ref{fig:dataflow-execution}.
     \begin{lstlisting}[basicstyle=\scriptsize,name=DataFlowTriSYCL]
 template<typename T, typename U>
 void readInput(T *buffer_in, const U &d_b) {
-  for(int i = 0; i < NUM_ROWS; ++i)
-    for (int j = 0; j < ELE_PER_ROW; ++j)
-      xilinx::pipeline([&] {
-        buffer_in[ELE_PER_ROW*i+j] = d_b[ELE_PER_ROW*i+j];
-      });
+ for(int i = 0; i < NUM_ROWS; ++i)
+  for (int j = 0; j < ELE_PER_ROW; ++j)
+    xilinx::pipeline([&] {
+      buffer_in[ELE_PER_ROW*i+j] = d_b[ELE_PER_ROW*i+j];
+    });
 }
 
 template<typename T, typename U>
 void compute(T *buffer_in, U *buffer_out) {
-  for(int i = 0; i < NUM_ROWS; ++i)
-    for (int j = 0; j < ELE_PER_ROW; ++j)
-      xilinx::pipeline([&] {
-        int inTmp = buffer_in[ELE_PER_ROW*i+j];
-        int outTmp = inTmp * ALPHA;
-        buffer_out[ELE_PER_ROW*i+j] = outTmp;
-      });
+ for(int i = 0; i < NUM_ROWS; ++i)
+  for (int j = 0; j < ELE_PER_ROW; ++j)
+    xilinx::pipeline([&] {
+      int inTmp = buffer_in[ELE_PER_ROW*i+j];
+      int outTmp = inTmp * ALPHA;
+      buffer_out[ELE_PER_ROW*i+j] = outTmp;
+    });
 }
 
 template<typename T, typename U>
 void writeOutput(T *buffer_out, const U &d_a) {
-  for(int i = 0; i < NUM_ROWS; ++i)
-    for (int j = 0; j < ELE_PER_ROW; ++j)
-      xilinx::pipeline([&] {
-        d_a[ELE_PER_ROW*i+j] = buffer_out[ELE_PER_ROW*i+j];
-      });
+ for(int i = 0; i < NUM_ROWS; ++i)
+  for (int j = 0; j < ELE_PER_ROW; ++j)
+    xilinx::pipeline([&] {
+      d_a[ELE_PER_ROW*i+j] = buffer_out[ELE_PER_ROW*i+j];
+    });
 }
 
 cgh.single_task<class add>
@@ -633,6 +633,14 @@ interprocedural view between host code and device code, allowing for
 example some variable that appears to be a constant on the host-side to be
 directly evaluated on the device code without requiring some explicit
 host-device PCIe data transfer as for OpenCL or HLS C++.
+
+We have not yet looked deeply at the understanding of the different
+performance results and QoR (quality of results). The complexity comes
+from comparing different tool versions, using different Clang/LLVM
+versions, with different optimizing paths, and the various Xilinx tool
+versions exercising different heuristics with different behaviour
+according to the input languages (OpenCL, HLS C++ and SPIR-df for
+triSYCL).
 
 
 \section{Array partitioning}
@@ -832,12 +840,16 @@ process while interoperable with the ubiquitous C/C++ world. The SYCL
 runtime provides an implicit task graph managing asynchronicity and data
 transfers across the various memory spaces.
 
-SYCL is one of the candidates inside the ISO C++ committee to push more
-heterogeneous computing as a first-class citizen into the language and is
-an experimental sand-box to show-case new non-functional concepts such as
-the pipelining/dataflow execution models or the way some arrays are
-implemented. Our experiments with triSYCL show that it is competitive with
-other more conventional programming tools and languages.
+SYCL is one of the candidates inside the ISO C++ committee to push
+more heterogeneous computing as a first-class citizen into the
+language and is an experimental sand-box to show-case new
+non-functional concepts such as the pipelining/dataflow execution
+models or the way some arrays are implemented. Our early experiments
+with triSYCL show that it has the potential to be competitive with
+other more conventional programming tools and languages, even if it is
+only done with a research prototype and we have not looked deeply in
+the understanding of the current performance results among the
+different tools and their versions.
 
 With even more modern meta-programming features comping into C++ such as
 introspection and generative programming
