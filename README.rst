@@ -2,6 +2,16 @@
  Distributed & Heterogeneous Programming in C/C++ (DHPCC++18)
 ==============================================================
 
+**Early experiments using SYCL single-source modern C++ on Xilinx FPGA**,
+Ronan Keryell (Xilinx Research Labs, Dublin, Ireland) & Lin-Ya Yu
+(Xilinx Research Labs, Dublin, Ireland).
+*IWOCL '18 Proceedings of the International Workshop on OpenCL.*
+Oxford, United Kingdom — May 14 - 16, 2018.
+
+Article: `src/DHPCC-2018-triSYCL-FPGA-final.pdf <src/DHPCC-2018-triSYCL-FPGA-final.pdf>`_
+
+Slides: https://github.com/keryell/ronan/raw/gh-pages/Talks/2018/2018-05-14-IWOCL-DHPCC-trceiSYCL/2018-05-14-IWOCL-DHPCC-triSYCL.pdf
+
 https://www.iwocl.org/iwocl-2018/dhpcc/
 
 http://sycl.tech/distributed-heterogeneous-programming-in-c-cpp-dhpccpp18.html
